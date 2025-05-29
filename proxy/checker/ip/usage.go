@@ -8,11 +8,6 @@ import (
 	"github.com/bestruirui/bestsub/proxy/info"
 )
 
-const (
-	defaultTimeout = 10 * time.Second
-	userAgent      = "BestSub IP Checker/1.0" // Example User-Agent
-)
-
 // toIPUsageType maps API type strings to info.IPUsageType
 func toIPUsageType(apiTypeRaw string) info.IPUsageType {
 	if apiTypeRaw == "" {
@@ -45,8 +40,8 @@ func toIPUsageType(apiTypeRaw string) info.IPUsageType {
 // GetIPUsageInfo fetches IP usage information from various APIs.
 func GetIPUsageInfo(ipAddr string) (info.IPUsageInfo, error) {
 	// client is initialized using defaultTimeout from utils.go (same package, so no import needed for defaultTimeout)
-	client := &http.Client{Timeout: defaultTimeout} 
-	usageInfo := info.IPUsageInfo{} 
+	client := &http.Client{Timeout: defaultTimeout}
+	usageInfo := info.IPUsageInfo{}
 
 	var collectedErrors []string
 
@@ -76,7 +71,7 @@ func GetIPUsageInfo(ipAddr string) (info.IPUsageInfo, error) {
 		usageInfo.IPApi = toIPUsageType(ipApiAsnType)
 		usageInfo.IPApiHost = toIPUsageType(ipApiCompType)
 	}
-	
+
 	// Fetch from AbuseIPDB
 	abuseIPDBUsageType, err := FetchAbuseIPDBUsageData(ipAddr, client)
 	if err != nil {
@@ -103,4 +98,4 @@ func GetIPUsageInfo(ipAddr string) (info.IPUsageInfo, error) {
 	}
 
 	return usageInfo, nil
-} 
+}
