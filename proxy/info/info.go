@@ -19,18 +19,104 @@ type Unlock struct {
 	Disney     bool
 	Youtube    bool
 	Cloudflare bool
+	Tiktok     bool
+	Spotify    bool
+	Amazon     bool
+}
+
+type IPUsageType int
+const (
+	HomeUsage IPUsageType = iota
+	BusinessUsage
+	HostingUsage
+)
+
+type IPUsageInfo struct {
+	IPInfo 			IPUsageType
+	IPInfoHost 		IPUsageType
+	IPRegistry 		IPUsageType
+	IPRegistryHost 	IPUsageType
+	IPApi 			IPUsageType
+	IPApiHost 		IPUsageType
+	AbuseIPDB 		IPUsageType
+	IP2Location 	IPUsageType
+}
+
+type IPRiskScore int
+const (
+	IPRiskScoreVeryLow IPRiskScore = iota
+	IPRiskScoreLow
+	IPRiskScoreMedium
+	IPRiskScoreHigh
+	IPRiskScoreVeryHigh
+)
+
+type IPRiskInfo struct {
+	Scamalytics 	IPRiskScore
+	IPAPI 			IPRiskScore
+	AbuseIPDB 		IPRiskScore
+	IPQS 			IPRiskScore
+	DBIP 			IPRiskScore
+}
+
+type IPRiskFactor struct {
+	Country 	string
+	Proxy		bool
+	Tor 		bool
+	VPN 		bool
+	Hosting 	bool
+	Abuse 		bool
+	Spam 		bool
+}
+
+type IPRiskFactorInfo struct {
+	IP2Location 	IPRiskFactor
+	IPApi 			IPRiskFactor
+	IPRegistry 		IPRiskFactor
+	IPQS 			IPRiskFactor
+	Scamalytics		IPRiskFactor
+	IPData		 	IPRiskFactor
+	IPInfo 			IPRiskFactor
+	IPWhois 		IPRiskFactor
+}
+
+type IPBannedInfo struct {
+	Normal 		int
+	Tagged 		int
+	Banned 		int
+}
+
+type IPInfo struct {
+	IPUsage			IPUsageInfo
+	IPRisk			IPRiskInfo
+	IPRiskFactor	IPRiskFactorInfo
+	IPBanned		IPBannedInfo
+}
+
+type NetLatencyInfo struct {
+	ChinaTelecom	map[string]uint16
+	ChinaUnicom		map[string]uint16
+	ChinaMobile		map[string]uint16
+	International	map[string]uint16
+}
+
+type NetInfo struct {
+	Latency		NetLatencyInfo
+	Route		map[string]string	// 指不同回程的线路，例如Beijing-ChinaUnicom-TCP的线路等等
 }
 
 type ProxyInfo struct {
-	Unlock    Unlock
-	Speed     int
-	SpeedSkip bool
-	Rate      float32
-	Risk      int
-	Delay     uint16
-	Alive     bool
-	Country   string
-	Flag      string
+	Unlock   	 Unlock
+	IP			 IPInfo
+	Net			 NetInfo
+	Speed    	 int
+	SpeedSkip 	 bool
+	Rate     	 float32
+	Risk     	 int
+	Delay     	 uint16
+	Alive     	 bool
+	Country   	 string
+	Flag     	 string
 }
 
 type Proxy struct {

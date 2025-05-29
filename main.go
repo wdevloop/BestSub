@@ -59,6 +59,15 @@ func (app *App) Initialize() error {
 
 	checkConfig()
 
+	// Ensure resource files are downloaded
+	if err := checker.EnsureResourceFiles(); err != nil {
+		// Log the error but don't necessarily exit, as some functionalities might still work
+		// or a more specific error handling might be needed in checkers that use these files.
+		log.Error("Failed to ensure resource files: %v", err)
+		// If certain files are absolutely critical for startup, you might choose to exit:
+		// return fmt.Errorf("failed to ensure critical resource files: %w", err)
+	}
+
 	if err := app.initConfigWatcher(); err != nil {
 		return fmt.Errorf("init config watcher failed: %w", err)
 	}
@@ -320,6 +329,12 @@ func proxyCheckTask(proxy *info.Proxy) {
 			checker.NetflixTest()
 		case "disney":
 			checker.DisneyTest()
+		case "tiktok":
+			checker.TiktokTest()
+		case "amazon":
+			checker.AmazonTest()
+		case "spotify":
+			checker.SpotifyTest()
 		}
 	}
 	switch config.GlobalConfig.Rename.Method {
