@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: stable
+      - name: Build Linux binary
+        run: |
+          GOOS=linux GOARCH=amd64 go build -v -o bestsub
+      - uses: actions/upload-artifact@v3
+        with:
+          name: bestsub-linux-amd64
+          path: bestsub
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: stable
+      - name: Build Windows binary
+        run: go build -v -o bestsub.exe
+      - uses: actions/upload-artifact@v3
+        with:
+          name: bestsub-windows-amd64
+          path: bestsub.exe

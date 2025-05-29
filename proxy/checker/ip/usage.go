@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bestruirui/bestsub/proxy/info"
 )
@@ -45,8 +46,8 @@ func toIPUsageType(apiTypeRaw string) info.IPUsageType {
 // GetIPUsageInfo fetches IP usage information from various APIs.
 func GetIPUsageInfo(ipAddr string) (info.IPUsageInfo, error) {
 	// client is initialized using defaultTimeout from utils.go (same package, so no import needed for defaultTimeout)
-	client := &http.Client{Timeout: defaultTimeout} 
-	usageInfo := info.IPUsageInfo{} 
+	client := &http.Client{Timeout: defaultTimeout}
+	usageInfo := info.IPUsageInfo{}
 
 	var collectedErrors []string
 
@@ -76,7 +77,7 @@ func GetIPUsageInfo(ipAddr string) (info.IPUsageInfo, error) {
 		usageInfo.IPApi = toIPUsageType(ipApiAsnType)
 		usageInfo.IPApiHost = toIPUsageType(ipApiCompType)
 	}
-	
+
 	// Fetch from AbuseIPDB
 	abuseIPDBUsageType, err := FetchAbuseIPDBUsageData(ipAddr, client)
 	if err != nil {
@@ -103,4 +104,4 @@ func GetIPUsageInfo(ipAddr string) (info.IPUsageInfo, error) {
 	}
 
 	return usageInfo, nil
-} 
+}

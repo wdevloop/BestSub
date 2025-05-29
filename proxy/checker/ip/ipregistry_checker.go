@@ -3,6 +3,8 @@ package ip
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/bestruirui/bestsub/proxy/info"
 )
 
 // JSON Structs for IPRegistry
@@ -63,4 +65,4 @@ func FetchIPRegistryRiskFactors(ipAddr string, client *http.Client) (factors inf
 	factors.Abuse = respData.Security.IsAbuser
 
 	return factors, nil
-} 
+}

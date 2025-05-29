@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/bestruirui/bestsub/proxy/info"
 )
 
 // JSON Structs for IPApi
@@ -22,12 +24,12 @@ type ipApiResponse struct {
 	ASN     ipApiASN     `json:"asn"`
 	Company ipApiCompany `json:"company"`
 	// For Risk Factors
-	Location    ipApiLocation `json:"location"`
-	IsProxy     bool          `json:"is_proxy"`
-	IsTor       bool          `json:"is_tor"`
-	IsVPN       bool          `json:"is_vpn"`
-	IsDatacenter bool         `json:"is_datacenter"`
-	IsAbuser    bool          `json:"is_abuser"`
+	Location     ipApiLocation `json:"location"`
+	IsProxy      bool          `json:"is_proxy"`
+	IsTor        bool          `json:"is_tor"`
+	IsVPN        bool          `json:"is_vpn"`
+	IsDatacenter bool          `json:"is_datacenter"`
+	IsAbuser     bool          `json:"is_abuser"`
 }
 
 // FetchIPApiUsageData fetches usage types from api.ipapi.is
@@ -51,7 +53,7 @@ func FetchIPAPIRiskScore(ipAddr string, client *http.Client) (riskScore info.IPR
 	if err != nil {
 		return info.IPRiskScoreLow, fmt.Errorf("FetchIPAPIRiskScore failed for IP %s: %w", ipAddr, err)
 	}
-	
+
 	// Extract the text part of the score, e.g., "Very Low" from "0 (Very Low)"
 	scoreText := respData.Company.AbuserScore
 	if strings.Contains(scoreText, "(") {
@@ -82,4 +84,4 @@ func FetchIPAPIRiskFactors(ipAddr string, client *http.Client) (factors info.IPR
 	// factors.Spam remains false as per plan
 
 	return factors, nil
-} 
+}
