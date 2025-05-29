@@ -1,0 +1,6 @@
+[submodule "quality_shells/IPQuality"]
+	path = quality_shells/IPQuality
+	url = https://github.com/xykt/IPQuality
+[submodule "quality_shells/NetQuality"]
+	path = quality_shells/NetQuality
+	url = https://github.com/xykt/NetQuality
