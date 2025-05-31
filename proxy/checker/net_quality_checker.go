@@ -4,20 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/bestruirui/bestsub/utils/log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/bestruirui/bestsub/proxy/info"
-	"github.com/bestruirui/bestsub/utils/log"
 )
 
-// This file will house the core logic for network quality checks. 
+// This file will house the core logic for network quality checks.
 
 // Province represents a Chinese province for testing
 type Province struct {
@@ -52,29 +49,29 @@ type InternationalTestTarget struct {
 
 // NetQualityChecker provides network quality testing functionality
 type NetQualityChecker struct {
-	provinces             []Province
-	delayTargets          []DelayTestTarget
-	routeTargets          []RouteTestTarget
-	internationalTargets  []InternationalTestTarget
+	provinces            []Province
+	delayTargets         []DelayTestTarget
+	routeTargets         []RouteTestTarget
+	internationalTargets []InternationalTestTarget
 }
 
 // NewNetQualityChecker creates a new NetQualityChecker instance
 func NewNetQualityChecker() (*NetQualityChecker, error) {
 	checker := &NetQualityChecker{}
-	
+
 	// Ensure resource files are available
 	if err := EnsureResourceFiles(); err != nil {
 		return nil, fmt.Errorf("failed to ensure resource files: %w", err)
 	}
-	
+
 	// Load provinces data
 	if err := checker.loadProvinces(); err != nil {
 		return nil, fmt.Errorf("failed to load provinces: %w", err)
 	}
-	
+
 	// Initialize test targets
 	checker.initializeTestTargets()
-	
+
 	return checker, nil
 }
 
@@ -84,16 +81,16 @@ func (nqc *NetQualityChecker) loadProvinces() error {
 	if err != nil {
 		return fmt.Errorf("failed to get province.json path: %w", err)
 	}
-	
+
 	data, err := os.ReadFile(provincePath)
 	if err != nil {
 		return fmt.Errorf("failed to read province file: %w", err)
 	}
-	
+
 	if err := json.Unmarshal(data, &nqc.provinces); err != nil {
 		return fmt.Errorf("failed to unmarshal province data: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -101,7 +98,7 @@ func (nqc *NetQualityChecker) loadProvinces() error {
 func (nqc *NetQualityChecker) initializeTestTargets() {
 	// Initialize delay test targets for major provinces
 	majorProvinces := []string{"BJ", "SH", "GD"} // Beijing, Shanghai, Guangdong
-	
+
 	for _, provinceCode := range majorProvinces {
 		// Add targets for each ISP
 		nqc.delayTargets = append(nqc.delayTargets, []DelayTestTarget{
@@ -109,7 +106,7 @@ func (nqc *NetQualityChecker) initializeTestTargets() {
 			{Province: provinceCode, ISP: "CU", Host: fmt.Sprintf("%s-cu-v4.ip.zstaticcdn.com", strings.ToLower(provinceCode))},
 			{Province: provinceCode, ISP: "CM", Host: fmt.Sprintf("%s-cm-v4.ip.zstaticcdn.com", strings.ToLower(provinceCode))},
 		}...)
-		
+
 		// Add route test targets
 		nqc.routeTargets = append(nqc.routeTargets, []RouteTestTarget{
 			{Province: provinceCode, ISP: "CT", Host: fmt.Sprintf("%s-ct-v4.ip.zstaticcdn.com", strings.ToLower(provinceCode)), Protocol: "TCP"},
@@ -120,7 +117,7 @@ func (nqc *NetQualityChecker) initializeTestTargets() {
 			{Province: provinceCode, ISP: "CM", Host: fmt.Sprintf("%s-cm-v4.ip.zstaticcdn.com", strings.ToLower(provinceCode)), Protocol: "UDP"},
 		}...)
 	}
-	
+
 	// Initialize international test targets
 	nqc.internationalTargets = []InternationalTestTarget{
 		{Country: "US", City: "Los Angeles", Host: "lax.connectivitycheck.gstatic.com"},
@@ -140,9 +137,9 @@ func (c *Checker) CheckNetworkQuality() error {
 		log.Error("Failed to create NetQualityChecker: %v", err)
 		return err
 	}
-	
+
 	log.Info("Starting network quality check for proxy: %v", c.Proxy.Raw["name"])
-	
+
 	// Initialize NetInfo if not already done
 	if c.Proxy.Info.Net.Latency.ChinaTelecom == nil {
 		c.Proxy.Info.Net.Latency.ChinaTelecom = make(map[string]uint16)
@@ -151,27 +148,27 @@ func (c *Checker) CheckNetworkQuality() error {
 		c.Proxy.Info.Net.Latency.International = make(map[string]uint16)
 		c.Proxy.Info.Net.Route = make(map[string]string)
 	}
-	
+
 	// Check delays (with timeout for each test)
 	if err := nqc.checkDelays(c); err != nil {
 		log.Debug("Delays check completed with some errors: %v", err)
 	}
-	
+
 	// Check routes (with timeout for each test)
 	if err := nqc.checkRoutes(c); err != nil {
 		log.Debug("Routes check completed with some errors: %v", err)
 	}
-	
+
 	// Check international delays using iperf targets
 	if err := nqc.checkInternationalDelaysFromIperf(c); err != nil {
 		log.Debug("International iperf delays check completed with some errors: %v", err)
 	}
-	
+
 	// Check international delays using standard targets
 	if err := nqc.checkInternationalDelays(c); err != nil {
 		log.Debug("International delays check completed with some errors: %v", err)
 	}
-	
+
 	log.Info("Completed network quality check for proxy: %v", c.Proxy.Raw["name"])
 	return nil
 }
@@ -180,14 +177,14 @@ func (c *Checker) CheckNetworkQuality() error {
 func (nqc *NetQualityChecker) checkDelays(c *Checker) error {
 	ctx, cancel := context.WithTimeout(c.Proxy.Ctx, 60*time.Second)
 	defer cancel()
-	
+
 	for _, target := range nqc.delayTargets {
 		delay, err := nqc.measureTCPDelay(ctx, target.Host, c)
 		if err != nil {
 			log.Debug("Failed to measure delay to %s: %v", target.Host, err)
 			continue
 		}
-		
+
 		// Store delay based on ISP
 		key := fmt.Sprintf("%s-%s", target.Province, target.ISP)
 		switch target.ISP {
@@ -198,10 +195,10 @@ func (nqc *NetQualityChecker) checkDelays(c *Checker) error {
 		case "CM":
 			c.Proxy.Info.Net.Latency.ChinaMobile[key] = delay
 		}
-		
+
 		log.Debug("Delay to %s (%s): %d ms", target.Host, key, delay)
 	}
-	
+
 	return nil
 }
 
@@ -209,7 +206,7 @@ func (nqc *NetQualityChecker) checkDelays(c *Checker) error {
 func (nqc *NetQualityChecker) checkInternationalDelaysFromIperf(c *Checker) error {
 	// Load iperf targets from resource or use defaults
 	var iperfTargets []InternationalTestTarget
-	
+
 	// Try to load from iperf.json, fallback to defaults
 	targets, err := nqc.loadIperfTargetsAsInternational()
 	if err != nil {
@@ -218,10 +215,10 @@ func (nqc *NetQualityChecker) checkInternationalDelaysFromIperf(c *Checker) erro
 	} else {
 		iperfTargets = targets
 	}
-	
+
 	ctx, cancel := context.WithTimeout(c.Proxy.Ctx, 120*time.Second)
 	defer cancel()
-	
+
 	// Test each target with limited concurrency
 	for _, target := range iperfTargets {
 		delay, err := nqc.measureTCPDelay(ctx, target.Host, c)
@@ -229,16 +226,16 @@ func (nqc *NetQualityChecker) checkInternationalDelaysFromIperf(c *Checker) erro
 			log.Debug("Failed to measure international delay to %s: %v", target.Host, err)
 			continue
 		}
-		
+
 		key := fmt.Sprintf("%s-%s", target.Country, target.City)
 		c.Proxy.Info.Net.Latency.International[key] = delay
-		
+
 		log.Debug("International delay to %s (%s): %d ms", target.Host, key, delay)
-		
+
 		// Add small delay between tests to avoid overwhelming the proxy
 		time.Sleep(100 * time.Millisecond)
 	}
-	
+
 	return nil
 }
 
@@ -248,12 +245,12 @@ func (nqc *NetQualityChecker) loadIperfTargetsAsInternational() ([]International
 	if err != nil {
 		return nil, fmt.Errorf("failed to get iperf.json path: %w", err)
 	}
-	
+
 	data, err := os.ReadFile(iperfPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read iperf file: %w", err)
 	}
-	
+
 	// Define a local struct that matches the iperf.json format
 	type IperfTarget struct {
 		Code   int    `json:"code"`
@@ -263,12 +260,12 @@ func (nqc *NetQualityChecker) loadIperfTargetsAsInternational() ([]International
 		City   string `json:"city"`
 		CityZh string `json:"cityzh"`
 	}
-	
+
 	var iperfTargets []IperfTarget
 	if err := json.Unmarshal(data, &iperfTargets); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal iperf data: %w", err)
 	}
-	
+
 	// Convert to international targets
 	var targets []InternationalTestTarget
 	for _, iperf := range iperfTargets {
@@ -279,14 +276,14 @@ func (nqc *NetQualityChecker) loadIperfTargetsAsInternational() ([]International
 			Host:    iperf.Server,
 		})
 	}
-	
+
 	return targets, nil
 }
 
 // getCountryFromServer attempts to determine country from server hostname
 func (nqc *NetQualityChecker) getCountryFromServer(server string) string {
 	serverLower := strings.ToLower(server)
-	
+
 	if strings.Contains(serverLower, "he.net") || strings.Contains(serverLower, "fremont") {
 		return "US"
 	} else if strings.Contains(serverLower, "lon") || strings.Contains(serverLower, "london") {
@@ -308,7 +305,7 @@ func (nqc *NetQualityChecker) getCountryFromServer(server string) string {
 	} else if strings.Contains(serverLower, "singapore") {
 		return "SG"
 	}
-	
+
 	return "Unknown"
 }
 
@@ -334,13 +331,13 @@ func (nqc *NetQualityChecker) checkRoutes(c *Checker) error {
 			log.Debug("Failed to trace route to %s: %v", target.Host, err)
 			continue
 		}
-		
+
 		key := fmt.Sprintf("%s-%s-%s", target.Province, target.ISP, target.Protocol)
 		c.Proxy.Info.Net.Route[key] = route
-		
+
 		log.Debug("Route to %s (%s): %s", target.Host, key, route)
 	}
-	
+
 	return nil
 }
 
@@ -350,11 +347,11 @@ func (nqc *NetQualityChecker) traceRoute(host, protocol string) (string, error) 
 	if route, err := nqc.useNexttrace(host, protocol); err == nil {
 		return route, nil
 	}
-	
+
 	if route, err := nqc.useMTR(host, protocol); err == nil {
 		return route, nil
 	}
-	
+
 	// Fallback to basic route detection
 	return nqc.basicRouteDetection(host)
 }
@@ -363,25 +360,25 @@ func (nqc *NetQualityChecker) traceRoute(host, protocol string) (string, error) 
 func (nqc *NetQualityChecker) useNexttrace(host, protocol string) (string, error) {
 	var args []string
 	args = append(args, "-4", "--raw", "--psize", "1400", "-q", "8")
-	
+
 	switch strings.ToLower(protocol) {
 	case "tcp":
 		args = append(args, "--tcp", "-p", "80")
 	case "udp":
 		args = append(args, "--udp", "-p", "80")
 	}
-	
+
 	args = append(args, host)
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	
+
 	cmd := exec.CommandContext(ctx, "nexttrace", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("nexttrace failed: %w", err)
 	}
-	
+
 	return nqc.parseNexttraceOutput(string(output))
 }
 
@@ -389,25 +386,25 @@ func (nqc *NetQualityChecker) useNexttrace(host, protocol string) (string, error
 func (nqc *NetQualityChecker) useMTR(host, protocol string) (string, error) {
 	var args []string
 	args = append(args, "-4", "-C", "-G", "1", "-s", "1400", "-c", "1", "-f", "100")
-	
+
 	switch strings.ToLower(protocol) {
 	case "tcp":
 		args = append(args, "--tcp", "-P", "80")
 	case "udp":
 		args = append(args, "--udp", "-P", "80")
 	}
-	
+
 	args = append(args, host)
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	
+
 	cmd := exec.CommandContext(ctx, "mtr", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("mtr failed: %w", err)
 	}
-	
+
 	return nqc.parseMTROutput(string(output))
 }
 
@@ -418,13 +415,13 @@ func (nqc *NetQualityChecker) basicRouteDetection(host string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve %s: %w", host, err)
 	}
-	
+
 	if len(ips) == 0 {
 		return "", fmt.Errorf("no IPs found for %s", host)
 	}
-	
+
 	ip := ips[0].String()
-	
+
 	// Basic classification based on IP ranges (simplified)
 	if strings.HasPrefix(ip, "202.97") {
 		return "CN2GT", nil
@@ -437,7 +434,7 @@ func (nqc *NetQualityChecker) basicRouteDetection(host string) (string, error) {
 	} else if strings.Contains(host, "cm") || strings.Contains(host, "mobile") {
 		return "CMI", nil
 	}
-	
+
 	return "Unknown", nil
 }
 
@@ -445,7 +442,7 @@ func (nqc *NetQualityChecker) basicRouteDetection(host string) (string, error) {
 func (nqc *NetQualityChecker) parseNexttraceOutput(output string) (string, error) {
 	lines := strings.Split(output, "\n")
 	var asns []string
-	
+
 	for _, line := range lines {
 		// Look for AS numbers in the output
 		if strings.Contains(line, "AS") {
@@ -458,7 +455,7 @@ func (nqc *NetQualityChecker) parseNexttraceOutput(output string) (string, error
 			}
 		}
 	}
-	
+
 	return nqc.classifyRouteByASN(asns), nil
 }
 
@@ -466,7 +463,7 @@ func (nqc *NetQualityChecker) parseNexttraceOutput(output string) (string, error
 func (nqc *NetQualityChecker) parseMTROutput(output string) (string, error) {
 	lines := strings.Split(output, "\n")
 	var asns []string
-	
+
 	for _, line := range lines {
 		if strings.Contains(line, "AS") {
 			parts := strings.Split(line, ",")
@@ -478,7 +475,7 @@ func (nqc *NetQualityChecker) parseMTROutput(output string) (string, error) {
 			}
 		}
 	}
-	
+
 	return nqc.classifyRouteByASN(asns), nil
 }
 
@@ -488,7 +485,7 @@ func (nqc *NetQualityChecker) classifyRouteByASN(asns []string) string {
 	for _, asn := range asns {
 		asnSet[asn] = true
 	}
-	
+
 	// Check for specific ASN patterns
 	if asnSet["4809"] && asnSet["23764"] {
 		return "CTGGIA"
@@ -515,7 +512,7 @@ func (nqc *NetQualityChecker) classifyRouteByASN(asns []string) string {
 	} else if asnSet["7497"] {
 		return "CSTNET"
 	}
-	
+
 	return "Unknown"
 }
 
@@ -523,41 +520,41 @@ func (nqc *NetQualityChecker) classifyRouteByASN(asns []string) string {
 func (nqc *NetQualityChecker) checkInternationalDelays(c *Checker) error {
 	ctx, cancel := context.WithTimeout(c.Proxy.Ctx, 60*time.Second)
 	defer cancel()
-	
+
 	for _, target := range nqc.internationalTargets {
 		delay, err := nqc.measureTCPDelay(ctx, target.Host, c)
 		if err != nil {
 			log.Debug("Failed to measure international delay to %s: %v", target.Host, err)
 			continue
 		}
-		
+
 		key := fmt.Sprintf("%s-%s", target.Country, target.City)
 		c.Proxy.Info.Net.Latency.International[key] = delay
-		
+
 		log.Debug("International delay to %s (%s): %d ms", target.Host, key, delay)
 	}
-	
+
 	return nil
 }
 
 // measureTCPDelay measures TCP connection delay to a host using the proxy
 func (nqc *NetQualityChecker) measureTCPDelay(ctx context.Context, host string, c *Checker) (uint16, error) {
 	start := time.Now()
-	
+
 	// Create a connection through the proxy
 	conn, err := c.Proxy.Client.Transport.(*http.Transport).DialContext(ctx, "tcp", host+":80")
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to %s: %w", host, err)
 	}
 	defer conn.Close()
-	
+
 	delay := time.Since(start)
 	delayMs := uint16(delay.Milliseconds())
-	
+
 	// Cap delay at max uint16 value
 	if delay.Milliseconds() > 65535 {
 		delayMs = 65535
 	}
-	
+
 	return delayMs, nil
-} 
+}
