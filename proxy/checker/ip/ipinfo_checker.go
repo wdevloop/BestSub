@@ -3,6 +3,8 @@ package ip
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/bestruirui/bestsub/proxy/info"
 )
 
 // JSON Structs for IPInfo
@@ -33,7 +35,7 @@ func FetchIPInfoUsageData(ipAddr string, client *http.Client) (asnType string, c
 	var respData ipInfoResponse
 	url := fmt.Sprintf("https://ipinfo.io/widget/demo/%s", ipAddr)
 
-	err = genericFetchJSON(url, client, &respData) 
+	err = genericFetchJSON(url, client, &respData)
 	if err != nil {
 		return "", "", fmt.Errorf("FetchIPInfoUsageData failed for IP %s: %w", ipAddr, err)
 	}
@@ -42,7 +44,7 @@ func FetchIPInfoUsageData(ipAddr string, client *http.Client) (asnType string, c
 
 // FetchIPInfoRiskFactors fetches risk factors from ipinfo.io
 func FetchIPInfoRiskFactors(ipAddr string, client *http.Client) (factors info.IPRiskFactor, err error) {
-	var respData ipInfoResponse 
+	var respData ipInfoResponse
 	url := fmt.Sprintf("https://ipinfo.io/widget/demo/%s", ipAddr)
 
 	err = genericFetchJSON(url, client, &respData)
@@ -58,4 +60,4 @@ func FetchIPInfoRiskFactors(ipAddr string, client *http.Client) (factors info.IP
 	// Abuse is not directly provided by IPInfo in this structure
 
 	return factors, nil
-} 
+}

@@ -3,6 +3,8 @@ package ip
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/bestruirui/bestsub/proxy/info"
 )
 
 // JSON Structs for IP2Location
@@ -51,4 +53,4 @@ func FetchIP2LocationRiskFactors(ipAddr string, client *http.Client) (factors in
 	// factors.Spam remains false
 
 	return factors, nil
-} 
+}

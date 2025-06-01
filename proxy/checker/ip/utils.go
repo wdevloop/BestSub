@@ -3,11 +3,13 @@ package ip
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
-	"net"
-	"regexp"
+
+	"github.com/bestruirui/bestsub/proxy/info"
 )
 
 const (
@@ -75,7 +77,7 @@ func mapAbuseIPDBScoreToEnum(rawScore int) info.IPRiskScore {
 		return info.IPRiskScoreVeryHigh
 	}
 	if rawScore >= 25 { // Between 25 and 74
-		return info.IPRiskScoreHigh 
+		return info.IPRiskScoreHigh
 	}
 	return info.IPRiskScoreLow // 0-24
 }
@@ -112,29 +114,29 @@ func ValidateIP(ipStr string) string {
 	cleanIP := strings.TrimSpace(ipStr)
 	cleanIP = strings.TrimSuffix(cleanIP, "\n")
 	cleanIP = strings.TrimSuffix(cleanIP, "\r")
-	
+
 	// 使用正则表达式提取IP地址
 	ipv4Regex := regexp.MustCompile(`(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})`)
 	ipv6Regex := regexp.MustCompile(`([0-9a-fA-F:]+::[0-9a-fA-F:]*|[0-9a-fA-F:]*::[0-9a-fA-F:]+|[0-9a-fA-F:]+:[0-9a-fA-F:]+:[0-9a-fA-F:]+:[0-9a-fA-F:]+:[0-9a-fA-F:]+:[0-9a-fA-F:]+:[0-9a-fA-F:]+:[0-9a-fA-F:]+)`)
-	
+
 	// 先尝试IPv4
 	if match := ipv4Regex.FindString(cleanIP); match != "" {
 		if net.ParseIP(match) != nil {
 			return match
 		}
 	}
-	
+
 	// 再尝试IPv6
 	if match := ipv6Regex.FindString(cleanIP); match != "" {
 		if net.ParseIP(match) != nil {
 			return match
 		}
 	}
-	
+
 	// 直接验证清理后的字符串
 	if net.ParseIP(cleanIP) != nil {
 		return cleanIP
 	}
-	
+
 	return ""
-} 
+}
