@@ -23,21 +23,24 @@ import (
 )
 
 type App struct {
-	renamePath  string
-	configPath  string
-	interval    int
-	watcher     *fsnotify.Watcher
-	reloadTimer *time.Timer
+	renamePath   string
+	configPath   string
+	providerPath string
+	interval     int
+	watcher      *fsnotify.Watcher
+	reloadTimer  *time.Timer
 }
 
 func NewApp() *App {
 	configPath := flag.String("f", "", "config file path")
 	renamePath := flag.String("r", "", "rename file path")
+	providerPath := flag.String("p", "", "provider file path")
 	flag.Parse()
 
 	return &App{
-		configPath: *configPath,
-		renamePath: *renamePath,
+		configPath:   *configPath,
+		renamePath:   *renamePath,
+		providerPath: *providerPath,
 	}
 }
 
@@ -94,6 +97,9 @@ func (app *App) initConfigPath() error {
 	if app.renamePath == "" {
 		app.renamePath = filepath.Join(configDir, "rename.yaml")
 	}
+	if app.providerPath == "" {
+		app.providerPath = filepath.Join(configDir, "providers.yaml")
+	}
 	return nil
 }
 
@@ -111,6 +117,12 @@ func (app *App) loadConfig() error {
 
 	if err := yaml.Unmarshal(yamlFile, &config.GlobalConfig); err != nil {
 		return fmt.Errorf("parse config file failed: %w", err)
+	}
+
+	if config.GlobalConfig.ProviderFile == "" {
+		config.GlobalConfig.ProviderFile = app.providerPath
+	} else {
+		app.providerPath = config.GlobalConfig.ProviderFile
 	}
 
 	info.CountryCodeRegexInit(app.renamePath)

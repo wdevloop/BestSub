@@ -1,9 +1,12 @@
 package saver
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/bestruirui/bestsub/config"
+	"github.com/bestruirui/bestsub/providerconfig"
 	"github.com/bestruirui/bestsub/proxy/info"
 	"github.com/bestruirui/bestsub/utils/log"
 	"gopkg.in/yaml.v3"
@@ -22,40 +25,70 @@ type ConfigSaver struct {
 }
 
 func NewConfigSaver(results *[]info.Proxy) *ConfigSaver {
-	return &ConfigSaver{
+	saver := &ConfigSaver{
 		results:     results,
 		saveMethods: chooseSaveMethods(),
-		categories: []ProxyCategory{
-			{
-				Name:    "all.yaml",
-				Proxies: make([]map[string]any, 0),
-				Filter:  func(result info.Proxy) bool { return result.Info.Alive },
+		categories:  make([]ProxyCategory, 0),
+	}
+
+	providers, err := providerconfig.Load(config.GlobalConfig.ProviderFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Info("provider file not found: %v", config.GlobalConfig.ProviderFile)
+		} else {
+			log.Error("load provider file failed: %v", err)
+		}
+	}
+
+	for _, p := range providers {
+		prov := p
+		saver.categories = append(saver.categories, ProxyCategory{
+			Name:    prov.Output,
+			Proxies: make([]map[string]any, 0),
+			Filter: func(result info.Proxy) bool {
+				return providerconfig.Match(prov.Filter, result.Info)
 			},
-			{
-				Name:    "speed.yaml",
-				Proxies: make([]map[string]any, 0),
-				Filter:  func(result info.Proxy) bool { return result.Info.Speed > config.GlobalConfig.Check.MinSpeed },
-			},
-			{
-				Name:    "openai.yaml",
-				Proxies: make([]map[string]any, 0),
-				Filter:  func(result info.Proxy) bool { return result.Info.Unlock.Chatgpt },
-			},
-			{
-				Name:    "youtube.yaml",
-				Proxies: make([]map[string]any, 0),
-				Filter:  func(result info.Proxy) bool { return result.Info.Unlock.Youtube },
-			},
-			{
-				Name:    "netflix.yaml",
-				Proxies: make([]map[string]any, 0),
-				Filter:  func(result info.Proxy) bool { return result.Info.Unlock.Netflix },
-			},
-			{
-				Name:    "disney.yaml",
-				Proxies: make([]map[string]any, 0),
-				Filter:  func(result info.Proxy) bool { return result.Info.Unlock.Disney },
-			},
+		})
+	}
+
+	if len(saver.categories) == 0 {
+		saver.categories = defaultCategories()
+	}
+
+	return saver
+}
+
+func defaultCategories() []ProxyCategory {
+	return []ProxyCategory{
+		{
+			Name:    "all.yaml",
+			Proxies: make([]map[string]any, 0),
+			Filter:  func(result info.Proxy) bool { return result.Info.Alive },
+		},
+		{
+			Name:    "speed.yaml",
+			Proxies: make([]map[string]any, 0),
+			Filter:  func(result info.Proxy) bool { return result.Info.Speed > config.GlobalConfig.Check.MinSpeed },
+		},
+		{
+			Name:    "openai.yaml",
+			Proxies: make([]map[string]any, 0),
+			Filter:  func(result info.Proxy) bool { return result.Info.Unlock.Chatgpt },
+		},
+		{
+			Name:    "youtube.yaml",
+			Proxies: make([]map[string]any, 0),
+			Filter:  func(result info.Proxy) bool { return result.Info.Unlock.Youtube },
+		},
+		{
+			Name:    "netflix.yaml",
+			Proxies: make([]map[string]any, 0),
+			Filter:  func(result info.Proxy) bool { return result.Info.Unlock.Netflix },
+		},
+		{
+			Name:    "disney.yaml",
+			Proxies: make([]map[string]any, 0),
+			Filter:  func(result info.Proxy) bool { return result.Info.Unlock.Disney },
 		},
 	}
 }
@@ -81,6 +114,7 @@ func SaveConfig(results *[]info.Proxy) {
 
 func (cs *ConfigSaver) Save() error {
 	cs.categorizeProxies()
+	cs.saveResults()
 
 	for _, category := range cs.categories {
 		if err := cs.saveCategory(category); err != nil {
@@ -90,6 +124,19 @@ func (cs *ConfigSaver) Save() error {
 	}
 
 	return nil
+}
+
+func (cs *ConfigSaver) saveResults() {
+	jsonData, err := json.MarshalIndent(cs.results, "", "  ")
+	if err != nil {
+		log.Error("serialize results failed: %v", err)
+		return
+	}
+	for _, saveMethod := range cs.saveMethods {
+		if err := saveMethod(jsonData, "results.json"); err != nil {
+			log.Error("save results failed with one method: %v", err)
+		}
+	}
 }
 
 func (cs *ConfigSaver) categorizeProxies() {

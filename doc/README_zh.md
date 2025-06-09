@@ -11,7 +11,8 @@
 1. 根据自己系统选择 [release](https://github.com/bestruirui/BestSub/releases) 中的文件
 2. 下载[config.example.yaml](https://raw.githubusercontent.com/bestruirui/BestSub/master/doc/config.example.yaml) 和 [rename.yaml](https://raw.githubusercontent.com/bestruirui/BestSub/master/doc/rename.yaml) 文件 到 `config` 文件夹中
 3. 参考[配置文件说明](./config_zh.md) 修改配置文件后，重命名为 `config.yaml`
-4. 运行即可
+4. （可选）根据[Provider 配置说明](./provider_config_zh.md) 编写 `providers.yaml`
+5. 运行即可
 
 ### Docker
 

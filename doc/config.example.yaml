@@ -88,3 +88,5 @@ proxy:
 sub-urls:
   - https://example.com/sub1
   - https://example.com/sub2
+# Provider filter file
+provider-file: providers.yaml
