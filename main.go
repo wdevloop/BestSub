@@ -26,6 +26,8 @@ type App struct {
 	renamePath   string
 	configPath   string
 	providerPath string
+	resultsPath  string
+	mode         string
 	interval     int
 	watcher      *fsnotify.Watcher
 	reloadTimer  *time.Timer
@@ -35,12 +37,16 @@ func NewApp() *App {
 	configPath := flag.String("f", "", "config file path")
 	renamePath := flag.String("r", "", "rename file path")
 	providerPath := flag.String("p", "", "provider file path")
+	resultsPath := flag.String("j", "", "results json path")
+	mode := flag.String("mode", "both", "run mode: test|gen|both")
 	flag.Parse()
 
 	return &App{
 		configPath:   *configPath,
 		renamePath:   *renamePath,
 		providerPath: *providerPath,
+		resultsPath:  *resultsPath,
+		mode:         *mode,
 	}
 }
 
@@ -125,6 +131,11 @@ func (app *App) loadConfig() error {
 	}
 	config.GlobalConfig.ProviderFile = app.providerPath
 
+	if app.resultsPath == "" {
+		execPath := utils.GetExecutablePath()
+		app.resultsPath = filepath.Join(execPath, "output", "results.json")
+	}
+
 	info.CountryCodeRegexInit(app.renamePath)
 
 	return nil
@@ -188,12 +199,28 @@ func (app *App) Run() {
 		}
 	}()
 
-	for {
-		maintask()
-		utils.UpdateSubs()
-		nextCheck := time.Now().Add(time.Duration(app.interval) * time.Minute)
-		log.Info("next check time: %v", nextCheck.Format("2006-01-02 15:04:05"))
-		time.Sleep(time.Duration(app.interval) * time.Minute)
+	switch app.mode {
+	case "test":
+		results := maintask()
+		saver.SaveResults(&results)
+		return
+	case "gen":
+		results, err := saver.LoadResults(app.resultsPath)
+		if err != nil {
+			log.Error("load results failed: %v", err)
+			return
+		}
+		saver.GenerateProviders(&results)
+		return
+	default:
+		for {
+			results := maintask()
+			saver.SaveConfig(&results)
+			utils.UpdateSubs()
+			nextCheck := time.Now().Add(time.Duration(app.interval) * time.Minute)
+			log.Info("next check time: %v", nextCheck.Format("2006-01-02 15:04:05"))
+			time.Sleep(time.Duration(app.interval) * time.Minute)
+		}
 	}
 }
 
@@ -208,7 +235,7 @@ func main() {
 
 	app.Run()
 }
-func maintask() {
+func maintask() []info.Proxy {
 	proxies := make([]info.Proxy, 0)
 
 	proxy.GetProxies(&proxies)
@@ -300,12 +327,9 @@ func maintask() {
 		log.Info("end speed test")
 	}
 
-	saver.SaveConfig(&proxies)
-
-	proxies = nil
-
 	pool.Release()
 
+	return proxies
 }
 
 func proxyCheckTask(proxy *info.Proxy) {

@@ -36,6 +36,21 @@ docker run -itd \
 go run main.go -f /path/to/config.yaml -r /path/to/rename.yaml
 ```
 
+### 运行模式
+
+通过 `-mode` 参数控制程序行为：
+
+- `test` 仅执行检测并输出 `results.json`
+- `gen` 读取 `-j` 指定的 JSON 生成 provider 文件
+- `both` 默认模式，检测完成后同时生成 provider
+
+示例：
+
+```bash
+go run main.go -mode test
+go run main.go -mode gen -j ./output/results.json
+```
+
 
 ### 自建测速地址
 

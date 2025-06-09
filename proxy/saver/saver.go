@@ -112,6 +112,37 @@ func SaveConfig(results *[]info.Proxy) {
 	}
 }
 
+// SaveResults writes only the results.json file without generating providers.
+func SaveResults(results *[]info.Proxy) {
+	saver := NewConfigSaver(results)
+	saver.saveResults()
+}
+
+// GenerateProviders categorizes proxies by provider rules and saves provider files
+// without modifying or saving the results JSON.
+func GenerateProviders(results *[]info.Proxy) {
+	saver := NewConfigSaver(results)
+	saver.categorizeProxies()
+	for _, category := range saver.categories {
+		if err := saver.saveCategory(category); err != nil {
+			log.Error("save %s category failed: %v", category.Name, err)
+		}
+	}
+}
+
+// LoadResults reads a results.json file into a slice of Proxy objects.
+func LoadResults(path string) ([]info.Proxy, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var results []info.Proxy
+	if err := json.Unmarshal(data, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 func (cs *ConfigSaver) Save() error {
 	cs.categorizeProxies()
 	cs.saveResults()

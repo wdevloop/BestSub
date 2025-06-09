@@ -37,6 +37,21 @@ docker run -itd \
 go run main.go -f /path/to/config.yaml -r /path/to/rename.yaml
 ```
 
+### Run Modes
+
+Use the `-mode` flag to control execution:
+
+- `test` – perform checks and output only `results.json`
+- `gen` – read an existing JSON specified by `-j` and generate providers
+- `both` – default, run checks and generate providers in one step
+
+Example:
+
+```bash
+go run main.go -mode test
+go run main.go -mode gen -j ./output/results.json
+```
+
 ## Custom Speed Test URL
 
 > (Optional) Since some nodes block common speed test URLs, you may need to create your own speed test URL
