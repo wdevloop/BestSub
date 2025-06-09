@@ -80,6 +80,7 @@ providers:
         route:
           Beijing-ChinaUnicom-TCP: "AS4837"
   CNQuality:
+    output: cn_quality.yaml
     filter:
       country: "^CN$"
       speed: ">2048"

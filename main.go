@@ -97,9 +97,6 @@ func (app *App) initConfigPath() error {
 	if app.renamePath == "" {
 		app.renamePath = filepath.Join(configDir, "rename.yaml")
 	}
-	if app.providerPath == "" {
-		app.providerPath = filepath.Join(configDir, "providers.yaml")
-	}
 	return nil
 }
 
@@ -119,11 +116,14 @@ func (app *App) loadConfig() error {
 		return fmt.Errorf("parse config file failed: %w", err)
 	}
 
-	if config.GlobalConfig.ProviderFile == "" {
-		config.GlobalConfig.ProviderFile = app.providerPath
-	} else {
+	if app.providerPath == "" {
 		app.providerPath = config.GlobalConfig.ProviderFile
 	}
+	if app.providerPath == "" {
+		execPath := utils.GetExecutablePath()
+		app.providerPath = filepath.Join(execPath, "config", "providers.yaml")
+	}
+	config.GlobalConfig.ProviderFile = app.providerPath
 
 	info.CountryCodeRegexInit(app.renamePath)
 
