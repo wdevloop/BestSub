@@ -45,6 +45,7 @@ type Config struct {
 	Check           CheckConfig  `yaml:"check"`
 	PrintProgress   bool         `yaml:"print-progress"`
 	Save            SaveConfig   `yaml:"save"`
+	ProviderFile    string       `yaml:"provider-file"`
 	SubUrlsReTry    int          `yaml:"sub-urls-retry"`
 	SubUrls         []string     `yaml:"sub-urls"`
 	TypeInclude     []string     `yaml:"type-include"`

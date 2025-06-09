@@ -12,7 +12,8 @@
 1. Select the appropriate file from the [releases](https://github.com/bestruirui/BestSub/releases) based on your system
 2. Download [config.example.yaml](https://raw.githubusercontent.com/bestruirui/BestSub/master/doc/config.example.yaml) and [rename.yaml](https://raw.githubusercontent.com/bestruirui/BestSub/master/doc/rename.yaml) to the `config` folder
 3. Refer to the [Configuration Documentation](./config.md) to modify the configuration file, then rename it to `config.yaml`
-4. Run the application
+4. (Optional) Create `providers.yaml` following the [Provider Filter Documentation](./provider_config.md)
+5. Run the application
 
 ## Docker
 
@@ -34,6 +35,21 @@ docker run -itd \
 
 ```bash
 go run main.go -f /path/to/config.yaml -r /path/to/rename.yaml
+```
+
+### Run Modes
+
+Use the `-mode` flag to control execution:
+
+- `test` – perform checks and output only `results.json`
+- `gen` – read an existing JSON specified by `-j` and generate providers
+- `both` – default, run checks and generate providers in one step
+
+Example:
+
+```bash
+go run main.go -mode test
+go run main.go -mode gen -j ./output/results.json
 ```
 
 ## Custom Speed Test URL
