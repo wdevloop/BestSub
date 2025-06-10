@@ -3,6 +3,7 @@ module github.com/bestruirui/bestsub
 go 1.23.0
 
 require (
+	github.com/antonmedv/expr v1.14.0
 	github.com/dlclark/regexp2 v1.11.5
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/metacubex/mihomo v1.19.5
