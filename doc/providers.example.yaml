@@ -2,12 +2,13 @@ providers:
   USFastClean:
     output: "us_fast.yaml"
     lowerbound: 5
-    rules:
-      - order: speed
-        desc: true
-        restriction: re("^US$", country) && alive
-      - order: delay
-        restriction: delay < 50
+    ruleSets:
+      - rules:
+          - order: speed
+            desc: true
+            restriction: re("^US$", country) && alive
+          - order: delay
+            restriction: delay < 50
   CNQuality:
     output: "cn_quality.yaml"
     rules:

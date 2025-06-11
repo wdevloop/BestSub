@@ -9,12 +9,18 @@ providers:
   ProviderName:
     output: filename.yaml   # optional, defaults to <ProviderName>.yaml
     lowerbound: 5           # minimum nodes to keep after each rule
+    # simple form: a single list of rules
     rules:
       - order: speed        # numeric expression for sorting
         desc: true          # descending order
         restriction: country == "US" && alive
       - order: delay
         restriction: delay < 50
+    # advanced form: multiple rule sets executed sequentially
+    # ruleSets:
+    #   - rules:
+    #       - order: ...
+    #       - ...
 ```
 
 ## Expressions
@@ -60,12 +66,13 @@ providers:
   USFastClean:
     output: us_fast.yaml
     lowerbound: 5
-    rules:
-      - order: speed
-        desc: true
-        restriction: re("^US$", country) && alive
-      - order: delay
-        restriction: delay < 50
+    ruleSets:
+      - rules:
+          - order: speed
+            desc: true
+            restriction: re("^US$", country) && alive
+          - order: delay
+            restriction: delay < 50
   CNQuality:
     output: cn_quality.yaml
     rules:

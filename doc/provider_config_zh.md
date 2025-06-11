@@ -9,12 +9,18 @@ providers:
   Provider名称:
     output: 文件名.yaml   # 可选，默认为 Provider 名称 + .yaml
     lowerbound: 5         # 每条规则筛选后的最少数量
+    # 简单写法：仅包含一组规则
     rules:
       - order: speed      # 用于排序的数值表达式
         desc: true        # 是否降序
         restriction: country == "US" && alive
       - order: delay
         restriction: delay < 50
+    # 进阶写法：多组规则依次执行
+    # ruleSets:
+    #   - rules:
+    #       - order: ...
+    #       - ...
 ```
 
 ## 表达式说明
@@ -57,12 +63,13 @@ providers:
   USFastClean:
     output: us_fast.yaml
     lowerbound: 5
-    rules:
-      - order: speed
-        desc: true
-        restriction: re("^US$", country) && alive
-      - order: delay
-        restriction: delay < 50
+    ruleSets:
+      - rules:
+          - order: speed
+            desc: true
+            restriction: re("^US$", country) && alive
+          - order: delay
+            restriction: delay < 50
   CNQuality:
     output: cn_quality.yaml
     rules:
