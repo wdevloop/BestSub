@@ -6,9 +6,9 @@ import (
 	"os"
 	"reflect"
 	"regexp"
-	"strconv"
-	"strings"
+	"sort"
 
+	"github.com/antonmedv/expr"
 	"github.com/bestruirui/bestsub/proxy/info"
 	"gopkg.in/yaml.v3"
 )
@@ -17,9 +17,40 @@ type providerFile struct {
 	Providers map[string]Provider `yaml:"providers"`
 }
 
+type Rule struct {
+	Restriction string `yaml:"restriction"`
+	Order       string `yaml:"order"`
+	Desc        bool   `yaml:"desc"`
+}
+
+type RuleSet struct {
+	Rules []Rule `yaml:"rules"`
+}
+
 type Provider struct {
-	Output string                 `yaml:"output"`
-	Filter map[string]interface{} `yaml:"filter"`
+	Output     string    `yaml:"output"`
+	LowerBound int       `yaml:"lowerbound"`
+	RuleSets   []RuleSet `yaml:"ruleSets"`
+	Rules      []Rule    `yaml:"rules"`
+}
+
+// exprEnv exposes proxy info fields and helper functions to expression
+type exprEnv struct {
+	info.ProxyInfo
+	Re   func(string, string) bool
+	Size func(any) int
+	Sum  func(...any) float64
+	Map  func(...any) float64
+}
+
+func newEnv(p info.ProxyInfo) exprEnv {
+	return exprEnv{
+		ProxyInfo: p,
+		Re:        regexpMatch,
+		Size:      sizeOf,
+		Sum:       sum,
+		Map:       mapValue,
+	}
 }
 
 func Load(path string) ([]Provider, error) {
@@ -36,157 +67,168 @@ func Load(path string) ([]Provider, error) {
 		if p.Output == "" {
 			p.Output = fmt.Sprintf("%s.yaml", name)
 		}
+		if len(p.RuleSets) == 0 && len(p.Rules) > 0 {
+			p.RuleSets = []RuleSet{{Rules: p.Rules}}
+		}
 		providers = append(providers, p)
 	}
 	return providers, nil
 }
 
-func Match(filter map[string]interface{}, infoData info.ProxyInfo) bool {
-	return matchMap(filter, reflect.ValueOf(infoData))
-}
-
-func matchMap(filter map[string]interface{}, val reflect.Value) bool {
-	for k, cond := range filter {
-		f := findFieldOrMap(val, k)
-		if !f.IsValid() {
-			return false
-		}
-		if !matchValue(cond, f) {
-			return false
-		}
-	}
-	return true
-}
-
-func findFieldOrMap(val reflect.Value, key string) reflect.Value {
-	if val.Kind() == reflect.Pointer {
-		if val.IsNil() {
-			return reflect.Value{}
-		}
-		val = val.Elem()
-	}
-	switch val.Kind() {
-	case reflect.Struct:
-		typ := val.Type()
-		for i := 0; i < typ.NumField(); i++ {
-			if strings.EqualFold(typ.Field(i).Name, key) {
-				return val.Field(i)
-			}
-		}
-	case reflect.Map:
-		mv := val.MapIndex(reflect.ValueOf(key))
-		if mv.IsValid() {
-			return mv
-		}
-		for _, mk := range val.MapKeys() {
-			if strings.EqualFold(mk.String(), key) {
-				return val.MapIndex(mk)
-			}
-		}
-	}
-	return reflect.Value{}
-}
-
-func matchValue(cond interface{}, val reflect.Value) bool {
-	if val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface {
-		if val.IsNil() {
-			return false
-		}
-		val = val.Elem()
-	}
-	switch val.Kind() {
-	case reflect.Bool:
-		b, ok := cond.(bool)
-		if !ok {
-			return false
-		}
-		return val.Bool() == b
-	case reflect.String:
-		s, ok := cond.(string)
-		if !ok {
-			s = fmt.Sprintf("%v", cond)
-		}
-		re, err := regexp.Compile(s)
-		if err != nil {
-			return false
-		}
-		return re.MatchString(val.String())
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return matchNumber(cond, float64(val.Int()))
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return matchNumber(cond, float64(val.Uint()))
-	case reflect.Float32, reflect.Float64:
-		return matchNumber(cond, val.Float())
-	case reflect.Map, reflect.Struct:
-		m, ok := cond.(map[string]interface{})
-		if !ok {
-			return false
-		}
-		return matchMap(m, val)
-	default:
-		return false
-	}
-}
-
-func matchNumber(cond interface{}, val float64) bool {
-	switch c := cond.(type) {
-	case string:
-		s := strings.TrimSpace(c)
-		if strings.HasPrefix(s, ">=") {
-			t, err := strconv.ParseFloat(strings.TrimSpace(s[2:]), 64)
-			if err != nil {
-				return false
-			}
-			return val >= t
-		}
-		if strings.HasPrefix(s, "<=") {
-			t, err := strconv.ParseFloat(strings.TrimSpace(s[2:]), 64)
-			if err != nil {
-				return false
-			}
-			return val <= t
-		}
-		if strings.HasPrefix(s, ">") {
-			t, err := strconv.ParseFloat(strings.TrimSpace(s[1:]), 64)
-			if err != nil {
-				return false
-			}
-			return val > t
-		}
-		if strings.HasPrefix(s, "<") {
-			t, err := strconv.ParseFloat(strings.TrimSpace(s[1:]), 64)
-			if err != nil {
-				return false
-			}
-			return val < t
-		}
-		if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
-			parts := strings.Split(strings.TrimSuffix(strings.TrimPrefix(s, "["), "]"), ",")
-			if len(parts) == 2 {
-				min, err1 := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
-				max, err2 := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
-				if err1 != nil || err2 != nil {
-					return false
+// Apply executes provider rules on proxies and returns selected proxies
+func Apply(p Provider, proxies []info.Proxy) []info.Proxy {
+	current := proxies
+	var prevOrder string
+	var prevDesc bool
+	for _, rs := range p.RuleSets {
+		for i, r := range rs.Rules {
+			filtered := make([]info.Proxy, 0)
+			for _, pr := range current {
+				if r.Restriction == "" {
+					filtered = append(filtered, pr)
+					continue
 				}
-				return val >= min && val <= max
+				ok, err := evalBool(r.Restriction, pr.Info)
+				if err != nil {
+					continue
+				}
+				if ok {
+					filtered = append(filtered, pr)
+				}
+			}
+			sort.Slice(filtered, func(i, j int) bool {
+				af, _ := evalFloat(r.Order, filtered[i].Info)
+				bf, _ := evalFloat(r.Order, filtered[j].Info)
+				if r.Desc {
+					return af > bf
+				}
+				return af < bf
+			})
+			if p.LowerBound > 0 && len(filtered) < p.LowerBound {
+				extras := append([]info.Proxy{}, current...)
+				if prevOrder != "" {
+					sort.Slice(extras, func(i, j int) bool {
+						af, _ := evalFloat(prevOrder, extras[i].Info)
+						bf, _ := evalFloat(prevOrder, extras[j].Info)
+						if prevDesc {
+							return af > bf
+						}
+						return af < bf
+					})
+				}
+				ids := make(map[int]struct{})
+				for _, pr := range filtered {
+					ids[pr.Id] = struct{}{}
+				}
+				for _, pr := range extras {
+					if len(filtered) >= p.LowerBound {
+						break
+					}
+					if _, ok := ids[pr.Id]; !ok {
+						filtered = append(filtered, pr)
+						ids[pr.Id] = struct{}{}
+					}
+				}
+			}
+			current = filtered
+			prevOrder = r.Order
+			prevDesc = r.Desc
+			if i == 0 && prevOrder == "" {
+				prevOrder = r.Order
+				prevDesc = r.Desc
 			}
 		}
-		t, err := strconv.ParseFloat(s, 64)
-		if err == nil {
-			return val == t
-		}
+	}
+	return current
+}
+
+// evaluate boolean expression using expr language
+func evalBool(expression string, inf info.ProxyInfo) (bool, error) {
+	out, err := expr.Eval(expression, newEnv(inf))
+	if err != nil {
+		return false, err
+	}
+	b, ok := out.(bool)
+	if !ok {
+		return false, fmt.Errorf("expression '%s' does not return bool", expression)
+	}
+	return b, nil
+}
+
+// evaluate numeric expression using expr language
+func evalFloat(expression string, inf info.ProxyInfo) (float64, error) {
+	out, err := expr.Eval(expression, newEnv(inf))
+	if err != nil {
+		return 0, err
+	}
+	if f, ok := toFloat(out); ok {
+		return f, nil
+	}
+	return 0, fmt.Errorf("expression '%s' does not return number", expression)
+}
+
+func regexpMatch(pattern, value string) bool {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
 		return false
-	case int, int8, int16, int32, int64:
-		t := reflect.ValueOf(c).Int()
-		return val == float64(t)
-	case uint, uint8, uint16, uint32, uint64:
-		t := reflect.ValueOf(c).Uint()
-		return val == float64(t)
-	case float32, float64:
-		t := reflect.ValueOf(c).Float()
-		return val == t
+	}
+	return re.MatchString(value)
+}
+
+func sizeOf(v any) int {
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Array, reflect.Slice, reflect.Map, reflect.String:
+		return rv.Len()
 	default:
-		return false
+		return 0
+	}
+}
+
+func sum(args ...any) float64 {
+	var total float64
+	for _, a := range args {
+		if f, ok := toFloat(a); ok {
+			total += f
+		}
+	}
+	return total
+}
+
+func mapValue(args ...any) float64 {
+	for i := 0; i+1 < len(args); i += 2 {
+		cond, _ := args[i].(bool)
+		if cond {
+			if f, ok := toFloat(args[i+1]); ok {
+				return f
+			}
+			return 0
+		}
+	}
+	if len(args)%2 == 1 {
+		if f, ok := toFloat(args[len(args)-1]); ok {
+			return f
+		}
+	}
+	return 0
+}
+
+func toFloat(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case float32:
+		return float64(n), true
+	case float64:
+		return n, true
+	default:
+		return 0, false
 	}
 }
 
@@ -194,66 +236,11 @@ func MarshalExample() ([]byte, error) {
 	example := providerFile{
 		Providers: map[string]Provider{
 			"USFastClean": {
-				Output: "us_fast.yaml",
-				Filter: map[string]interface{}{
-					"country": "^US$",
-					"alive":   true,
-					"speed":   ">=10240",
-					"delay":   "<=50",
-					"rate":    "[0,1.5]",
-					"unlock": map[string]interface{}{
-						"netflix": true,
-						"disney":  true,
-						"youtube": true,
-						"chatgpt": true,
-					},
-					"ip": map[string]interface{}{
-						"ipUsage": map[string]interface{}{
-							"ipInfo": "[0,1]",
-						},
-						"ipRisk": map[string]interface{}{
-							"ipqs": "<=1",
-							"dbip": "<=2",
-						},
-						"ipRiskFactor": map[string]interface{}{
-							"ip2Location": map[string]interface{}{
-								"hosting": false,
-							},
-						},
-						"ipBanned": map[string]interface{}{
-							"banned": 0,
-						},
-					},
-					"net": map[string]interface{}{
-						"latency": map[string]interface{}{
-							"International": map[string]interface{}{
-								"Tokyo": "<=70",
-							},
-							"ChinaTelecom": map[string]interface{}{
-								"Shanghai": "<=150",
-							},
-						},
-						"route": map[string]interface{}{
-							"Beijing-ChinaUnicom-TCP": "AS4837",
-						},
-					},
-				},
-			},
-			"CNQuality": {
-				Filter: map[string]interface{}{
-					"country": "^CN$",
-					"speed":   ">2048",
-					"unlock": map[string]interface{}{
-						"tiktok": true,
-					},
-					"ip": map[string]interface{}{
-						"ipBanned": map[string]interface{}{
-							"banned": 0,
-						},
-						"ipRisk": map[string]interface{}{
-							"ipqs": "<=2",
-						},
-					},
+				Output:     "us_fast.yaml",
+				LowerBound: 5,
+				Rules: []Rule{
+					{Restriction: `re("^US$", Country) && Alive`, Order: "Speed", Desc: true},
+					{Restriction: "Delay < 50", Order: "Delay", Desc: false},
 				},
 			},
 		},

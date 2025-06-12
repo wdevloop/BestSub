@@ -13,9 +13,10 @@ import (
 )
 
 type ProxyCategory struct {
-	Name    string
-	Proxies []map[string]any
-	Filter  func(result info.Proxy) bool
+	Name     string
+	Proxies  []map[string]any
+	Filter   func(result info.Proxy) bool
+	Provider *providerconfig.Provider
 }
 
 type ConfigSaver struct {
@@ -43,11 +44,9 @@ func NewConfigSaver(results *[]info.Proxy) *ConfigSaver {
 	for _, p := range providers {
 		prov := p
 		saver.categories = append(saver.categories, ProxyCategory{
-			Name:    prov.Output,
-			Proxies: make([]map[string]any, 0),
-			Filter: func(result info.Proxy) bool {
-				return providerconfig.Match(prov.Filter, result.Info)
-			},
+			Name:     prov.Output,
+			Proxies:  make([]map[string]any, 0),
+			Provider: &prov,
 		})
 	}
 
@@ -171,9 +170,16 @@ func (cs *ConfigSaver) saveResults() {
 }
 
 func (cs *ConfigSaver) categorizeProxies() {
-	for _, result := range *cs.results {
-		for i := range cs.categories {
-			if cs.categories[i].Filter(result) {
+	for i := range cs.categories {
+		if cs.categories[i].Provider != nil {
+			selected := providerconfig.Apply(*cs.categories[i].Provider, *cs.results)
+			for _, p := range selected {
+				cs.categories[i].Proxies = append(cs.categories[i].Proxies, p.Raw)
+			}
+			continue
+		}
+		for _, result := range *cs.results {
+			if cs.categories[i].Filter != nil && cs.categories[i].Filter(result) {
 				cs.categories[i].Proxies = append(cs.categories[i].Proxies, result.Raw)
 			}
 		}

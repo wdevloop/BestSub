@@ -8,18 +8,31 @@
 providers:
   Provider名称:
     output: 文件名.yaml   # 可选，默认为 Provider 名称 + .yaml
-    filter:
-      ...
+    lowerbound: 5         # 每条规则筛选后的最少数量
+    # 简单写法：仅包含一组规则
+    rules:
+      - order: speed      # 用于排序的数值表达式
+        desc: true        # 是否降序
+        restriction: country == "US" && alive
+      - order: delay
+        restriction: delay < 50
+    # 进阶写法：多组规则依次执行
+    # ruleSets:
+    #   - rules:
+    #       - order: ...
+    #       - ...
 ```
 
-## 编写规则
+## 表达式说明
 
-- **字符串**：使用正则表达式匹配。
-- **数字**：支持 `>=`、`<=`、`>`、`<`、`[min,max]` 或单个数字。
-- **布尔值**：直接写 `true` 或 `false`。
-- **map/结构体**：在子项中继续编写约束。
+`restriction` 和 `order` 使用 [Expr](https://github.com/expr-lang/expr) 语法，可直接引用 `ProxyInfo` 中的字段，并内置以下辅助函数：
 
-只有所有条件同时满足时，节点才会被划入对应的 provider。
+- `re(pattern, value)` – 正则匹配。
+- `size(v)` – 求数组、map 或字符串的长度。
+- `sum(v1, v2, ...)` – 将多个数值相加。
+- `map(cond1, val1, cond2, val2, default)` – 按条件返回对应的值。
+
+规则按顺序依次执行，每条规则会先根据 `order` 排序，再用 `restriction` 过滤结果。
 
 ## 可用的过滤字段
 
@@ -49,48 +62,20 @@ providers:
 providers:
   USFastClean:
     output: us_fast.yaml
-    filter:
-      country: "^US$"
-      alive: true
-      speed: ">=10240"
-      delay: "<=50"
-      rate: "[0,1.5]"
-      unlock:
-        netflix: true
-        disney: true
-        youtube: true
-        chatgpt: true
-      ip:
-        ipUsage:
-          ipInfo: "[0,1]"
-        ipRisk:
-          ipqs: "<=1"
-          dbip: "<=2"
-        ipRiskFactor:
-          ip2Location:
-            hosting: false
-        ipBanned:
-          banned: 0
-      net:
-        latency:
-          International:
-            Tokyo: "<=70"
-          ChinaTelecom:
-            Shanghai: "<=150"
-        route:
-          Beijing-ChinaUnicom-TCP: "AS4837"
+    lowerbound: 5
+    ruleSets:
+      - rules:
+          - order: speed
+            desc: true
+            restriction: re("^US$", country) && alive
+          - order: delay
+            restriction: delay < 50
   CNQuality:
     output: cn_quality.yaml
-    filter:
-      country: "^CN$"
-      speed: ">2048"
-      unlock:
-        tiktok: true
-      ip:
-        ipBanned:
-          banned: 0
-        ipRisk:
-          ipqs: "<=2"
+    rules:
+      - order: map(speed >= 20000, 1, speed >= 10000, 2, 3)
+        desc: false
+        restriction: country == "CN" && speed > 2048
 ```
 
 在 `config.yaml` 中通过 `provider-file` 选项指定此文件路径。程序运行结束后，会按配置生成各个 provider 文件，完整的检测结果存储在 `results.json` 中。

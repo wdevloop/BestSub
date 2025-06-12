@@ -8,18 +8,34 @@ This document explains how to group checked proxies into different providers usi
 providers:
   ProviderName:
     output: filename.yaml   # optional, defaults to <ProviderName>.yaml
-    filter:
-      ...
+    lowerbound: 5           # minimum nodes to keep after each rule
+    # simple form: a single list of rules
+    rules:
+      - order: speed        # numeric expression for sorting
+        desc: true          # descending order
+        restriction: country == "US" && alive
+      - order: delay
+        restriction: delay < 50
+    # advanced form: multiple rule sets executed sequentially
+    # ruleSets:
+    #   - rules:
+    #       - order: ...
+    #       - ...
 ```
 
-## Constraint Rules
+## Expressions
 
-- **String fields** use regular expressions.
-- **Numeric fields** support `>=`, `<=`, `>`, `<`, an inclusive `[min,max]` range or a single value.
-- **Boolean fields** match `true` or `false`.
-- **Map or struct fields** continue with nested keys.
+`restriction` and `order` use the [Expr](https://github.com/expr-lang/expr) language.
+All fields of `ProxyInfo` are available directly inside expressions. Several helper
+functions are exposed:
 
-A proxy matches a provider only when all specified constraints are satisfied.
+- `re(pattern, value)` – regular expression match.
+- `size(v)` – length of an array, map or string.
+- `sum(v1, v2, ...)` – sum numeric values.
+- `map(cond1, val1, cond2, val2, default)` – return the value associated with the first `cond` that is `true`.
+
+A proxy must satisfy all rules in sequence. Each rule sorts the current list using
+`order` and filters it by `restriction`.
 
 ## Available Filter Fields
 
@@ -49,48 +65,20 @@ Any field in `ProxyInfo` may be referenced in the filter using this nested style
 providers:
   USFastClean:
     output: us_fast.yaml
-    filter:
-      country: "^US$"
-      alive: true
-      speed: ">=10240"
-      delay: "<=50"
-      rate: "[0,1.5]"
-      unlock:
-        netflix: true
-        disney: true
-        youtube: true
-        chatgpt: true
-      ip:
-        ipUsage:
-          ipInfo: "[0,1]"
-        ipRisk:
-          ipqs: "<=1"
-          dbip: "<=2"
-        ipRiskFactor:
-          ip2Location:
-            hosting: false
-        ipBanned:
-          banned: 0
-      net:
-        latency:
-          International:
-            Tokyo: "<=70"
-          ChinaTelecom:
-            Shanghai: "<=150"
-        route:
-          Beijing-ChinaUnicom-TCP: "AS4837"
+    lowerbound: 5
+    ruleSets:
+      - rules:
+          - order: speed
+            desc: true
+            restriction: re("^US$", country) && alive
+          - order: delay
+            restriction: delay < 50
   CNQuality:
     output: cn_quality.yaml
-    filter:
-      country: "^CN$"
-      speed: ">2048"
-      unlock:
-        tiktok: true
-      ip:
-        ipBanned:
-          banned: 0
-        ipRisk:
-          ipqs: "<=2"
+    rules:
+      - order: map(speed >= 20000, 1, speed >= 10000, 2, 3)
+        desc: false
+        restriction: country == "CN" && speed > 2048
 ```
 
 Set the path to this file with `provider-file` in `config.yaml`. After checks complete, matching proxies are written to the specified provider files and the full results are saved in `results.json`.

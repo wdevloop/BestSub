@@ -1,45 +1,17 @@
 providers:
   USFastClean:
     output: "us_fast.yaml"
-    filter:
-      country: "^US$"
-      alive: true
-      speed: ">=10240"
-      delay: "<=50"
-      rate: "[0,1.5]"
-      unlock:
-        disney: true
-        netflix: true
-        youtube: true
-        chatgpt: true
-      ip:
-        ipUsage:
-          ipInfo: "[0,1]"
-        ipRisk:
-          ipqs: "<=1"
-          dbip: "<=2"
-        ipRiskFactor:
-          ip2Location:
-            hosting: false
-        ipBanned:
-          banned: 0
-      net:
-        latency:
-          International:
-            Tokyo: "<=70"
-          ChinaTelecom:
-            Shanghai: "<=150"
-        route:
-          Beijing-ChinaUnicom-TCP: "AS4837"
+    lowerbound: 5
+    ruleSets:
+      - rules:
+          - order: speed
+            desc: true
+            restriction: re("^US$", country) && alive
+          - order: delay
+            restriction: delay < 50
   CNQuality:
     output: "cn_quality.yaml"
-    filter:
-      country: "^CN$"
-      speed: ">2048"
-      unlock:
-        tiktok: true
-      ip:
-        ipBanned:
-          banned: 0
-        ipRisk:
-          ipqs: "<=2"
+    rules:
+      - order: map(speed >= 20000, 1, speed >= 10000, 2, 3)
+        desc: false
+        restriction: country == "CN" && speed > 2048
